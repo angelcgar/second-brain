@@ -13,33 +13,32 @@ import {
   transferArrayItem,
 } from '@angular/cdk/drag-drop';
 
-export type TaskStatus = 'inbox' | 'esperando' | 'sin_fecha' | 'en_proceso';
+export type ProjectStatus = 'not_started' | 'in_progress' | 'completed';
 
-export type Priority = 'Baja' | 'Media' | 'Alta' | 'Urgente';
+export type ProjectPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
 
-export interface Task {
+export interface ProjectItem {
   // Mandatory fields
   id: string;
   title: string;
-  status: TaskStatus;
+  status: ProjectStatus;
   created_at: string;
   edited: string;
 
   // Optional fields
-  fecha?: string;
-  objetivo?: string;
-  proyecto?: string;
-  contexto?: string;
-  prioridad?: Priority;
-  descripcion?: string;
-  url?: string;
   area?: string;
+  parentProject?: string;
+  timeline?: string;
+  prioridad?: ProjectPriority;
+  archivo?: boolean;
+  startDate?: string;
+  goalArea?: string;
 }
 
-export interface Column {
-  id: TaskStatus;
+export interface ProjectColumn {
+  id: ProjectStatus;
   title: string;
-  tasks: Task[];
+  projects: ProjectItem[];
 }
 
 interface FilterPill {
@@ -48,7 +47,7 @@ interface FilterPill {
 }
 
 @Component({
-  selector: 'app-kanban-board-task',
+  selector: 'app-kanban-board-projects',
   standalone: true,
   imports: [CommonModule, DragDropModule, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -58,7 +57,8 @@ interface FilterPill {
 
       <!-- ─── HEADER ─────────────────────────────────────────────── -->
       <header class="flex-shrink-0 px-6 pt-6 pb-4">
-        <h1 class="text-2xl font-bold text-white mb-4 tracking-tight">Tareas</h1>
+        <h1 class="text-2xl font-bold text-white tracking-tight">Proyectos</h1>
+        <p class="text-sm text-gray-400 mb-4 mt-1">Gestión de proyectos</p>
 
         <!-- Filter pills -->
         <div class="flex flex-wrap gap-2">
@@ -92,25 +92,25 @@ interface FilterPill {
                   {{ column.title }}
                 </h2>
                 <span class="text-xs text-gray-600 bg-neutral-800 rounded-full px-2 py-0.5">
-                  {{ column.tasks.length }}
+                  {{ column.projects.length }}
                 </span>
               </div>
 
               <!-- Drop list -->
               <div
                 cdkDropList
-                [cdkDropListData]="column.tasks"
+                [cdkDropListData]="column.projects"
                 [id]="column.id"
                 (cdkDropListDropped)="onDrop($event, column.id)"
                 class="flex flex-col gap-2 flex-1 overflow-y-auto min-h-[80px] pr-0.5"
               >
-                @for (task of column.tasks; track task.id) {
+                @for (project of column.projects; track project.id) {
                   <div
                     cdkDrag
-                    [cdkDragData]="task"
+                    [cdkDragData]="project"
                     (cdkDragStarted)="onDragStarted()"
                     (cdkDragEnded)="onDragEnded()"
-                    (click)="onTaskClick(task)"
+                    (click)="onProjectClick(project)"
                     class="task-card bg-neutral-800 rounded-lg p-3 cursor-pointer select-none
                            border border-transparent
                            hover:bg-neutral-750 hover:border-neutral-600
@@ -123,19 +123,19 @@ interface FilterPill {
                         <span class="block w-[14px] h-[2px] rounded bg-gray-400"></span>
                         <span class="block w-[14px] h-[2px] rounded bg-gray-400"></span>
                       </div>
-                      <p class="text-sm text-gray-300 leading-relaxed flex-1">{{ task.title }}</p>
+                      <p class="text-sm text-gray-300 leading-relaxed flex-1">{{ project.title }}</p>
                     </div>
 
                     <!-- Status badge -->
                     <div class="mt-2 flex">
-                      <span [class]="getStatusBadgeClass(task.status)">
-                        {{ getStatusLabel(task.status) }}
+                      <span [class]="getStatusBadgeClass(project.status)">
+                        {{ getStatusLabel(project.status) }}
                       </span>
                     </div>
 
                     <!-- CDK Drag Preview -->
                     <div *cdkDragPreview class="drag-preview bg-neutral-700 rounded-lg p-3 w-72 shadow-2xl shadow-black/60 border border-neutral-600">
-                      <p class="text-sm text-gray-200">{{ task.title }}</p>
+                      <p class="text-sm text-gray-200">{{ project.title }}</p>
                     </div>
 
                     <!-- CDK Drag Placeholder -->
@@ -146,7 +146,7 @@ interface FilterPill {
 
               <!-- Add task button -->
               <button
-                (click)="addTask(column.id)"
+                (click)="addProject(column.id)"
                 class="mt-3 w-full py-2 px-3 rounded-lg text-sm text-gray-500
                        hover:bg-neutral-800 hover:text-gray-300
                        border border-dashed border-neutral-700 hover:border-neutral-500
@@ -155,7 +155,7 @@ interface FilterPill {
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                 </svg>
-                Nueva tarea
+                Nuevo proyecto
               </button>
             </div>
           }
@@ -164,7 +164,7 @@ interface FilterPill {
     </div>
 
     <!-- ─── DIALOG ─────────────────────────────────────────────────── -->
-    @if (selectedTask()) {
+    @if (selectedProject()) {
       <!-- Overlay -->
       <div
         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -181,9 +181,9 @@ interface FilterPill {
           <!-- Top metadata row (ID, status badge, dates) -->
           <div class="flex items-center justify-between text-xs text-neutral-500 border-b border-neutral-800 pb-3">
             <div class="flex items-center gap-2">
-              <span class="font-mono text-neutral-600">ID: {{ selectedTask()!.id }}</span>
-              <span class="w-1.5 h-1.5 rounded-full" [class]="getStatusDotClass(selectedTask()!.status)"></span>
-              <span class="font-medium text-neutral-400">{{ getStatusLabel(selectedTask()!.status) }}</span>
+              <span class="font-mono text-neutral-600">ID: {{ selectedProject()!.id }}</span>
+              <span class="w-1.5 h-1.5 rounded-full" [class]="getStatusDotClass(selectedProject()!.status)"></span>
+              <span class="font-medium text-neutral-400">{{ getStatusLabel(selectedProject()!.status) }}</span>
             </div>
             <button
               (click)="closeDialog()"
@@ -200,7 +200,7 @@ interface FilterPill {
           <div class="mt-1">
             <input
               type="text"
-              [ngModel]="selectedTask()?.title"
+              [ngModel]="selectedProject()?.title"
               (ngModelChange)="updateField('title', $event)"
               placeholder="Sin título"
               class="w-full bg-transparent text-2xl font-bold text-white placeholder-neutral-700 border-none outline-none focus:ring-0 focus:outline-none p-0"
@@ -209,111 +209,106 @@ interface FilterPill {
 
           <!-- Properties Grid -->
           <div class="flex flex-col gap-3 py-3 border-y border-neutral-800/65">
+            <!-- Status (read-only to avoid breaking drag-and-drop mechanics) -->
+            <div class="grid grid-cols-[120px_1fr] items-center gap-4">
+              <span class="text-xs text-neutral-500 font-medium">Status</span>
+              <span class="text-sm text-neutral-200 px-2 py-1">{{ getStatusLabel(selectedProject()!.status) }}</span>
+            </div>
+
             <!-- Prioridad -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Prioridad</span>
               <select
-                [ngModel]="selectedTask()?.prioridad"
+                [ngModel]="selectedProject()?.prioridad"
                 (ngModelChange)="updateField('prioridad', $event)"
                 class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full cursor-pointer"
               >
                 <option value="" class="bg-neutral-900 text-neutral-500">Sin prioridad</option>
-                <option value="Baja" class="bg-neutral-900 text-neutral-300">Baja</option>
-                <option value="Media" class="bg-neutral-900 text-neutral-300">Media</option>
-                <option value="Alta" class="bg-neutral-900 text-neutral-300">Alta</option>
-                <option value="Urgente" class="bg-neutral-900 text-neutral-300">Urgente</option>
+                <option value="Low" class="bg-neutral-900 text-neutral-300">Low</option>
+                <option value="Medium" class="bg-neutral-900 text-neutral-300">Medium</option>
+                <option value="High" class="bg-neutral-900 text-neutral-300">High</option>
+                <option value="Urgent" class="bg-neutral-900 text-neutral-300">Urgent</option>
               </select>
             </div>
 
-            <!-- Fecha -->
+            <!-- Area -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
-              <span class="text-xs text-neutral-500 font-medium">Fecha</span>
-              <input
-                type="date"
-                [ngModel]="selectedTask()?.fecha"
-                (ngModelChange)="updateField('fecha', $event)"
-                class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
-              />
-            </div>
-
-            <!-- Proyecto -->
-            <div class="grid grid-cols-[120px_1fr] items-center gap-4">
-              <span class="text-xs text-neutral-500 font-medium">Proyecto</span>
+              <span class="text-xs text-neutral-500 font-medium">Area</span>
               <input
                 type="text"
-                [ngModel]="selectedTask()?.proyecto"
-                (ngModelChange)="updateField('proyecto', $event)"
-                placeholder="Vacío"
-                class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
-              />
-            </div>
-
-            <!-- Área -->
-            <div class="grid grid-cols-[120px_1fr] items-center gap-4">
-              <span class="text-xs text-neutral-500 font-medium">Área</span>
-              <input
-                type="text"
-                [ngModel]="selectedTask()?.area"
+                [ngModel]="selectedProject()?.area"
                 (ngModelChange)="updateField('area', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
             </div>
 
-            <!-- Objetivo -->
+            <!-- Parent Project -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
-              <span class="text-xs text-neutral-500 font-medium">Objetivo</span>
+              <span class="text-xs text-neutral-500 font-medium">Parent Project</span>
               <input
                 type="text"
-                [ngModel]="selectedTask()?.objetivo"
-                (ngModelChange)="updateField('objetivo', $event)"
+                [ngModel]="selectedProject()?.parentProject"
+                (ngModelChange)="updateField('parentProject', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
             </div>
 
-            <!-- Contexto -->
+            <!-- Timeline -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
-              <span class="text-xs text-neutral-500 font-medium">Contexto</span>
+              <span class="text-xs text-neutral-500 font-medium">Timeline</span>
               <input
                 type="text"
-                [ngModel]="selectedTask()?.contexto"
-                (ngModelChange)="updateField('contexto', $event)"
+                [ngModel]="selectedProject()?.timeline"
+                (ngModelChange)="updateField('timeline', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
             </div>
 
-            <!-- URL -->
+            <!-- Start Date -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
-              <span class="text-xs text-neutral-500 font-medium">URL</span>
+              <span class="text-xs text-neutral-500 font-medium">Start Date</span>
               <input
-                type="text"
-                [ngModel]="selectedTask()?.url"
-                (ngModelChange)="updateField('url', $event)"
-                placeholder="Vacío"
-                class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full font-mono"
+                type="date"
+                [ngModel]="selectedProject()?.startDate"
+                (ngModelChange)="updateField('startDate', $event)"
+                class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
             </div>
-          </div>
 
-          <!-- Descripción -->
-          <div class="flex flex-col gap-1.5">
-            <span class="text-xs text-neutral-500 font-medium">Descripción</span>
-            <textarea
-              [ngModel]="selectedTask()?.descripcion"
-              (ngModelChange)="updateField('descripcion', $event)"
-              placeholder="Escribe para añadir detalles sobre esta tarea..."
-              rows="6"
-              class="w-full bg-transparent text-sm text-neutral-205 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded-lg p-2 outline-none resize-y transition-colors leading-relaxed"
-            ></textarea>
+            <!-- Goal Area -->
+            <div class="grid grid-cols-[120px_1fr] items-center gap-4">
+              <span class="text-xs text-neutral-500 font-medium">Goal Area</span>
+              <input
+                type="text"
+                [ngModel]="selectedProject()?.goalArea"
+                (ngModelChange)="updateField('goalArea', $event)"
+                placeholder="Vacío"
+                class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
+              />
+            </div>
+
+            <!-- Archivo (checkbox) -->
+            <div class="grid grid-cols-[120px_1fr] items-center gap-4">
+              <span class="text-xs text-neutral-500 font-medium">Archivo</span>
+              <label class="flex items-center cursor-pointer px-2 py-1">
+                <input
+                  type="checkbox"
+                  [ngModel]="selectedProject()?.archivo"
+                  (ngModelChange)="updateField('archivo', $event)"
+                  class="w-4 h-4 rounded border-neutral-600 bg-neutral-900 text-blue-500 focus:ring-offset-neutral-900 focus:ring-neutral-700 cursor-pointer accent-blue-500"
+                />
+              </label>
+            </div>
           </div>
 
           <!-- Bottom dates and actions -->
           <div class="mt-4 pt-3 border-t border-neutral-800/60 flex items-center justify-between text-[11px] text-neutral-600">
             <div class="flex flex-col gap-0.5">
-              <span>Creado: {{ formatDate(selectedTask()!.created_at) }}</span>
-              <span>Editado: {{ formatDate(selectedTask()!.edited) }}</span>
+              <span>Creado: {{ formatDate(selectedProject()!.created_at) }}</span>
+              <span>Editado: {{ formatDate(selectedProject()!.edited) }}</span>
             </div>
             <button
               (click)="closeDialog()"
@@ -402,55 +397,45 @@ interface FilterPill {
     }
   `],
 })
-export class KanbanBoardTaskComponent implements OnInit {
+export class KanbanBoardProjectsComponent implements OnInit {
   // ── State ──────────────────────────────────────────────────────────
-  columns: Column[] = [
-    { id: 'inbox', title: 'Inbox', tasks: [] },
-    { id: 'esperando', title: 'Esperando', tasks: [] },
-    { id: 'sin_fecha', title: 'Sin fecha', tasks: [] },
-    { id: 'en_proceso', title: 'En proceso', tasks: [] },
+  columns: ProjectColumn[] = [
+    { id: 'not_started', title: 'Not Started', projects: [] },
+    { id: 'in_progress', title: 'In Progress', projects: [] },
+    { id: 'completed', title: 'Completed', projects: [] },
   ];
 
-  selectedTask = signal<Task | null>(null);
-  activePill = signal<string>('todas');
+  selectedProject = signal<ProjectItem | null>(null);
+  activePill = signal<string>('status');
 
   filterPills: FilterPill[] = [
-    { label: 'Hoy', key: 'hoy' },
-    { label: 'Proceso', key: 'proceso' },
-    { label: 'Siguiente Paso', key: 'siguiente_paso' },
-    { label: 'Esperando', key: 'esperando' },
-    { label: 'Todas', key: 'todas' },
-    { label: 'Logbook', key: 'logbook' },
-    { label: 'Pronto', key: 'pronto' },
+    { label: 'Entrega', key: 'entrega' },
+    { label: 'Lista', key: 'lista' },
+    { label: 'Status', key: 'status' },
+    { label: 'Prioridad', key: 'prioridad' },
+    { label: 'Timeline', key: 'timeline' },
+    { label: 'Urgente', key: 'urgente' },
+    { label: 'Proyectos', key: 'proyectos' },
   ];
 
   /** Flag to differentiate drag from click */
   private isDragging = false;
-  private taskCounter = 0;
+  private projectCounter = 0;
 
   // ── Lifecycle ──────────────────────────────────────────────────────
   ngOnInit(): void {
     const now = new Date().toISOString();
-    this.columns[0].tasks = [
-      { id: this.generateId(), title: 'Revisar correos nuevos', status: 'inbox', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Actualizar documentación del proyecto', status: 'inbox', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Preparar presentación del sprint', status: 'inbox', created_at: now, edited: now },
+    this.columns[0].projects = [
+      { id: this.generateId(), title: 'Definir requerimientos MVP', status: 'not_started', created_at: now, edited: now },
+      { id: this.generateId(), title: 'Investigación de mercado', status: 'not_started', created_at: now, edited: now },
     ];
 
-    this.columns[1].tasks = [
-      { id: this.generateId(), title: 'Esperando feedback del cliente', status: 'esperando', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Aprobación de diseño UI', status: 'esperando', created_at: now, edited: now },
+    this.columns[1].projects = [
+      { id: this.generateId(), title: 'Desarrollo de API principal', status: 'in_progress', created_at: now, edited: now },
     ];
 
-    this.columns[2].tasks = [
-      { id: this.generateId(), title: 'Investigar nuevas tecnologías', status: 'sin_fecha', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Leer artículos de arquitectura', status: 'sin_fecha', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Explorar features de Angular 22', status: 'sin_fecha', created_at: now, edited: now },
-    ];
-
-    this.columns[3].tasks = [
-      { id: this.generateId(), title: 'Implementar autenticación', status: 'en_proceso', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Review de pull requests', status: 'en_proceso', created_at: now, edited: now },
+    this.columns[2].projects = [
+      { id: this.generateId(), title: 'Diseño de la base de datos', status: 'completed', created_at: now, edited: now },
     ];
   }
 
@@ -466,7 +451,7 @@ export class KanbanBoardTaskComponent implements OnInit {
     }, 50);
   }
 
-  onDrop(event: CdkDragDrop<Task[]>, targetColumnId: TaskStatus): void {
+  onDrop(event: CdkDragDrop<ProjectItem[]>, targetColumnId: ProjectStatus): void {
     if (event.previousContainer === event.container) {
       moveItemInArray(
         event.container.data,
@@ -480,33 +465,33 @@ export class KanbanBoardTaskComponent implements OnInit {
         event.previousIndex,
         event.currentIndex,
       );
-      // Update status and edited date of moved task
-      const task = event.container.data[event.currentIndex];
-      task.status = targetColumnId;
-      task.edited = new Date().toISOString();
+      // Update status and edited date of moved project
+      const project = event.container.data[event.currentIndex];
+      project.status = targetColumnId;
+      project.edited = new Date().toISOString();
     }
   }
 
   // ── Click vs Drag ──────────────────────────────────────────────────
-  onTaskClick(task: Task): void {
+  onProjectClick(project: ProjectItem): void {
     if (this.isDragging) return;
-    this.selectedTask.set(task);
+    this.selectedProject.set(project);
   }
 
   // ── Dialog ─────────────────────────────────────────────────────────
   closeDialog(): void {
-    this.selectedTask.set(null);
+    this.selectedProject.set(null);
   }
 
-  // ── Add Task ───────────────────────────────────────────────────────
-  addTask(columnId: TaskStatus): void {
-    this.taskCounter++;
+  // ── Add Project ───────────────────────────────────────────────────────
+  addProject(columnId: ProjectStatus): void {
+    this.projectCounter++;
     const column = this.columns.find((c) => c.id === columnId);
     if (column) {
       const now = new Date().toISOString();
-      column.tasks.push({
+      column.projects.push({
         id: this.generateId(),
-        title: `Nueva tarea ${this.taskCounter}`,
+        title: `Nuevo proyecto ${this.projectCounter}`,
         status: columnId,
         created_at: now,
         edited: now,
@@ -515,18 +500,18 @@ export class KanbanBoardTaskComponent implements OnInit {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
-  updateField(field: keyof Task, value: any): void {
-    const task = this.selectedTask();
-    if (task) {
-      (task as any)[field] = value === '' ? undefined : value;
-      task.edited = new Date().toISOString();
-      this.selectedTask.set({ ...task });
+  updateField(field: keyof ProjectItem, value: any): void {
+    const project = this.selectedProject();
+    if (project) {
+      (project as any)[field] = value === '' ? undefined : value;
+      project.edited = new Date().toISOString();
+      this.selectedProject.set({ ...project });
 
-      // Update the task in memory list to keep board in sync
+      // Update the project in memory list to keep board in sync
       for (const col of this.columns) {
-        const index = col.tasks.findIndex(t => t.id === task.id);
+        const index = col.projects.findIndex(p => p.id === project.id);
         if (index !== -1) {
-          col.tasks[index] = { ...task };
+          col.projects[index] = { ...project };
           break;
         }
       }
@@ -549,38 +534,35 @@ export class KanbanBoardTaskComponent implements OnInit {
     }
   }
 
-  getStatusLabel(status: TaskStatus): string {
-    const labels: Record<TaskStatus, string> = {
-      inbox: 'Inbox',
-      esperando: 'Esperando',
-      sin_fecha: 'Sin fecha',
-      en_proceso: 'En proceso',
+  getStatusLabel(status: ProjectStatus): string {
+    const labels: Record<ProjectStatus, string> = {
+      not_started: 'Not Started',
+      in_progress: 'In Progress',
+      completed: 'Completed',
     };
     return labels[status];
   }
 
-  getStatusBadgeClass(status: TaskStatus): string {
+  getStatusBadgeClass(status: ProjectStatus): string {
     const base = 'text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider';
-    const variants: Record<TaskStatus, string> = {
-      inbox: `${base} bg-blue-950/60 text-blue-400`,
-      esperando: `${base} bg-yellow-950/60 text-yellow-400`,
-      sin_fecha: `${base} bg-neutral-700/80 text-gray-400`,
-      en_proceso: `${base} bg-green-950/60 text-green-400`,
+    const variants: Record<ProjectStatus, string> = {
+      not_started: `${base} bg-gray-900/80 text-gray-400`,
+      in_progress: `${base} bg-blue-950/60 text-blue-400`,
+      completed: `${base} bg-green-950/60 text-green-400`,
     };
     return variants[status];
   }
 
-  getStatusDotClass(status: TaskStatus): string {
-    const dots: Record<TaskStatus, string> = {
-      inbox: 'bg-blue-400',
-      esperando: 'bg-yellow-400',
-      sin_fecha: 'bg-gray-500',
-      en_proceso: 'bg-green-400',
+  getStatusDotClass(status: ProjectStatus): string {
+    const dots: Record<ProjectStatus, string> = {
+      not_started: 'bg-gray-500',
+      in_progress: 'bg-blue-400',
+      completed: 'bg-green-400',
     };
     return dots[status];
   }
 
   private generateId(): string {
-    return `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    return `proj-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   }
 }

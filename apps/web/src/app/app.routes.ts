@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
-import { KanbanBoardTaskComponent } from './kanban-board/kanban-board-task.component';
+import { KanbanDashboardComponent } from './kanban-dashboard.component';
 
 export const routes: Routes = [
-  { path: '', component: KanbanBoardTaskComponent }
+  { path: '', component: KanbanDashboardComponent }
 ];
