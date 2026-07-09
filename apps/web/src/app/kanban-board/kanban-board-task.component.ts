@@ -48,7 +48,7 @@ interface FilterPill {
 }
 
 @Component({
-  selector: 'app-kanban-board',
+  selector: 'app-kanban-board-task',
   standalone: true,
   imports: [CommonModule, DragDropModule, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -404,7 +404,7 @@ interface FilterPill {
     }
   `],
 })
-export class KanbanBoardComponent implements OnInit {
+export class KanbanBoardTaskComponent implements OnInit {
   // ── State ──────────────────────────────────────────────────────────
   columns: Column[] = [
     { id: 'inbox', title: 'Inbox', tasks: [] },
