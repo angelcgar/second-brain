@@ -1,6 +1,7 @@
 import {
   Component,
   OnInit,
+  inject,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
@@ -12,6 +13,7 @@ import {
   moveItemInArray,
   transferArrayItem,
 } from '@angular/cdk/drag-drop';
+import { TaskService } from './task.service';
 
 export type TaskStatus = 'inbox' | 'esperando' | 'sin_fecha' | 'en_proceso';
 
@@ -46,6 +48,17 @@ interface FilterPill {
   label: string;
   key: string;
 }
+
+type EditableTaskField =
+  | 'title'
+  | 'fecha'
+  | 'objetivo'
+  | 'proyecto'
+  | 'contexto'
+  | 'prioridad'
+  | 'descripcion'
+  | 'url'
+  | 'area';
 
 @Component({
   selector: 'app-kanban-board-task',
@@ -315,12 +328,20 @@ interface FilterPill {
               <span>Creado: {{ formatDate(selectedTask()!.created_at) }}</span>
               <span>Editado: {{ formatDate(selectedTask()!.edited) }}</span>
             </div>
-            <button
-              (click)="closeDialog()"
-              class="px-4 py-2 rounded-lg text-xs font-semibold bg-neutral-850 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-all duration-150"
-            >
-              Cerrar
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                (click)="deleteSelectedTask()"
+                class="px-4 py-2 rounded-lg text-xs font-semibold bg-red-950/60 hover:bg-red-900/80 text-red-300 hover:text-red-100 transition-all duration-150"
+              >
+                Eliminar
+              </button>
+              <button
+                (click)="closeDialog()"
+                class="px-4 py-2 rounded-lg text-xs font-semibold bg-neutral-850 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-all duration-150"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -403,6 +424,8 @@ interface FilterPill {
   `],
 })
 export class KanbanBoardTaskComponent implements OnInit {
+  private readonly taskService = inject(TaskService);
+
   // ── State ──────────────────────────────────────────────────────────
   columns: Column[] = [
     { id: 'inbox', title: 'Inbox', tasks: [] },
@@ -430,28 +453,7 @@ export class KanbanBoardTaskComponent implements OnInit {
 
   // ── Lifecycle ──────────────────────────────────────────────────────
   ngOnInit(): void {
-    const now = new Date().toISOString();
-    this.columns[0].tasks = [
-      { id: this.generateId(), title: 'Revisar correos nuevos', status: 'inbox', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Actualizar documentación del proyecto', status: 'inbox', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Preparar presentación del sprint', status: 'inbox', created_at: now, edited: now },
-    ];
-
-    this.columns[1].tasks = [
-      { id: this.generateId(), title: 'Esperando feedback del cliente', status: 'esperando', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Aprobación de diseño UI', status: 'esperando', created_at: now, edited: now },
-    ];
-
-    this.columns[2].tasks = [
-      { id: this.generateId(), title: 'Investigar nuevas tecnologías', status: 'sin_fecha', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Leer artículos de arquitectura', status: 'sin_fecha', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Explorar features de Angular 22', status: 'sin_fecha', created_at: now, edited: now },
-    ];
-
-    this.columns[3].tasks = [
-      { id: this.generateId(), title: 'Implementar autenticación', status: 'en_proceso', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Review de pull requests', status: 'en_proceso', created_at: now, edited: now },
-    ];
+    void this.loadTasks();
   }
 
   // ── Drag & Drop ────────────────────────────────────────────────────
@@ -473,18 +475,23 @@ export class KanbanBoardTaskComponent implements OnInit {
         event.previousIndex,
         event.currentIndex,
       );
-    } else {
-      transferArrayItem(
-        event.previousContainer.data,
-        event.container.data,
-        event.previousIndex,
-        event.currentIndex,
-      );
-      // Update status and edited date of moved task
       const task = event.container.data[event.currentIndex];
-      task.status = targetColumnId;
       task.edited = new Date().toISOString();
+      void this.persistTask(task);
+      return;
     }
+
+    transferArrayItem(
+      event.previousContainer.data,
+      event.container.data,
+      event.previousIndex,
+      event.currentIndex,
+    );
+    // Update status and edited date of moved task
+    const task = event.container.data[event.currentIndex];
+    task.status = targetColumnId;
+    task.edited = new Date().toISOString();
+    void this.persistTask(task);
   }
 
   // ── Click vs Drag ──────────────────────────────────────────────────
@@ -504,21 +511,29 @@ export class KanbanBoardTaskComponent implements OnInit {
     const column = this.columns.find((c) => c.id === columnId);
     if (column) {
       const now = new Date().toISOString();
-      column.tasks.push({
+      const newTask: Task = {
         id: this.generateId(),
         title: `Nueva tarea ${this.taskCounter}`,
         status: columnId,
         created_at: now,
         edited: now,
-      });
+      };
+      column.tasks.push(newTask);
+      void this.createTask(newTask);
     }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
-  updateField(field: keyof Task, value: any): void {
+  updateField(field: EditableTaskField, value: string): void {
     const task = this.selectedTask();
     if (task) {
-      (task as any)[field] = value === '' ? undefined : value;
+      if (field === 'title') {
+        task.title = value;
+      } else if (field === 'prioridad') {
+        task.prioridad = this.parsePriority(value);
+      } else {
+        task[field] = value === '' ? undefined : value;
+      }
       task.edited = new Date().toISOString();
       this.selectedTask.set({ ...task });
 
@@ -530,6 +545,28 @@ export class KanbanBoardTaskComponent implements OnInit {
           break;
         }
       }
+      void this.persistTask(task);
+    }
+  }
+
+  async deleteSelectedTask(): Promise<void> {
+    const task = this.selectedTask();
+    if (!task) return;
+
+    for (const col of this.columns) {
+      const index = col.tasks.findIndex((currentTask) => currentTask.id === task.id);
+      if (index !== -1) {
+        col.tasks.splice(index, 1);
+        break;
+      }
+    }
+
+    this.selectedTask.set(null);
+    try {
+      await this.taskService.deleteTask(task.id);
+    } catch (error) {
+      console.error('No se pudo eliminar la tarea', error);
+      await this.loadTasks();
     }
   }
 
@@ -582,5 +619,79 @@ export class KanbanBoardTaskComponent implements OnInit {
 
   private generateId(): string {
     return `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  private parsePriority(value: string): Priority | undefined {
+    if (value === 'Baja' || value === 'Media' || value === 'Alta' || value === 'Urgente') {
+      return value;
+    }
+    return undefined;
+  }
+
+  private async loadTasks(): Promise<void> {
+    try {
+      const tasks = await this.taskService.getTasks();
+      this.populateColumns(tasks);
+      this.taskCounter = tasks.length;
+    } catch (error) {
+      console.error('No se pudieron cargar las tareas', error);
+      this.populateColumns([]);
+    }
+  }
+
+  private populateColumns(tasks: Task[]): void {
+    const nextColumns: Column[] = [
+      { id: 'inbox', title: 'Inbox', tasks: [] },
+      { id: 'esperando', title: 'Esperando', tasks: [] },
+      { id: 'sin_fecha', title: 'Sin fecha', tasks: [] },
+      { id: 'en_proceso', title: 'En proceso', tasks: [] },
+    ];
+
+    for (const task of tasks) {
+      const column = nextColumns.find((currentColumn) => currentColumn.id === task.status);
+      if (column) {
+        column.tasks.push(task);
+      }
+    }
+
+    this.columns = nextColumns;
+  }
+
+  private async createTask(task: Task): Promise<void> {
+    try {
+      const createdTask = await this.taskService.createTask(task);
+      this.replaceTask(createdTask);
+      const selectedTask = this.selectedTask();
+      if (selectedTask?.id === createdTask.id) {
+        this.selectedTask.set({ ...createdTask });
+      }
+    } catch (error) {
+      console.error('No se pudo crear la tarea', error);
+      await this.loadTasks();
+    }
+  }
+
+  private async persistTask(task: Task): Promise<void> {
+    try {
+      const updatedTask = await this.taskService.updateTask(task);
+      this.replaceTask(updatedTask);
+      const selectedTask = this.selectedTask();
+      if (selectedTask?.id === updatedTask.id) {
+        this.selectedTask.set({ ...updatedTask });
+      }
+    } catch (error) {
+      console.error('No se pudo actualizar la tarea', error);
+      await this.loadTasks();
+    }
+  }
+
+  private replaceTask(nextTask: Task): void {
+    for (const col of this.columns) {
+      const index = col.tasks.findIndex((currentTask) => currentTask.id === nextTask.id);
+      if (index !== -1) {
+        col.tasks[index] = { ...nextTask };
+        return;
+      }
+    }
   }
 }
