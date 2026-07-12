@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { Task } from './kanban-board-task.component';
+import type { Task } from '../../shared/models';
 
 @Injectable({ providedIn: 'root' })
 export class TaskService {

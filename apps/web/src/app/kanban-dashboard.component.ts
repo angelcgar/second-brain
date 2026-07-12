@@ -1,9 +1,9 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { KanbanBoardTaskComponent } from './kanban-board/kanban-board-task.component';
-import { KanbanBoardProjectsComponent } from './kanban-board/kanban-board-projects.component';
-import { KanbanBoardGoalsComponent } from './kanban-board/kanban-board-goals.component';
-import { KanbanBoardAreasComponent } from './kanban-board/kanban-board-areas.component';
+import { KanbanBoardTaskComponent } from './features/kanban/task/kanban-board-task.component';
+import { KanbanBoardProjectsComponent } from './features/kanban/projects/kanban-board-projects.component';
+import { KanbanBoardGoalsComponent } from './features/kanban/goals/kanban-board-goals.component';
+import { KanbanBoardAreasComponent } from './features/kanban/areas/kanban-board-areas.component';
 
 @Component({
   selector: 'app-kanban-dashboard',

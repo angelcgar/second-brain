@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { AreaItem } from './kanban-board-areas.component';
+import type { AreaItem } from '../../shared/models';
 
 @Injectable({ providedIn: 'root' })
 export class AreaService {

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { GoalItem } from './kanban-board-goals.component';
+import type { GoalItem } from '../../shared/models';
 
 @Injectable({ providedIn: 'root' })
 export class GoalService {

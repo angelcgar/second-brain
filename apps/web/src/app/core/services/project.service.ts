@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import type { ProjectItem } from './kanban-board-projects.component';
+import type { ProjectItem } from '../../shared/models';
 
 @Injectable({ providedIn: 'root' })
 export class ProjectService {
