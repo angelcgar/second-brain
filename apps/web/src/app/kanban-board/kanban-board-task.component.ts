@@ -1,9 +1,10 @@
 import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   OnInit,
   inject,
   signal,
-  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -177,7 +178,7 @@ type EditableTaskField =
     </div>
 
     <!-- ─── DIALOG ─────────────────────────────────────────────────── -->
-    @if (selectedTask()) {
+    @if (editingTask) {
       <!-- Overlay -->
       <div
         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -194,9 +195,9 @@ type EditableTaskField =
           <!-- Top metadata row (ID, status badge, dates) -->
           <div class="flex items-center justify-between text-xs text-neutral-500 border-b border-neutral-800 pb-3">
             <div class="flex items-center gap-2">
-              <span class="font-mono text-neutral-600">ID: {{ selectedTask()!.id }}</span>
-              <span class="w-1.5 h-1.5 rounded-full" [class]="getStatusDotClass(selectedTask()!.status)"></span>
-              <span class="font-medium text-neutral-400">{{ getStatusLabel(selectedTask()!.status) }}</span>
+              <span class="font-mono text-neutral-600">ID: {{ editingTask!.id }}</span>
+              <span class="w-1.5 h-1.5 rounded-full" [class]="getStatusDotClass(editingTask!.status)"></span>
+              <span class="font-medium text-neutral-400">{{ getStatusLabel(editingTask!.status) }}</span>
             </div>
             <button
               (click)="closeDialog()"
@@ -213,7 +214,7 @@ type EditableTaskField =
           <div class="mt-1">
             <input
               type="text"
-              [ngModel]="selectedTask()?.title"
+              [ngModel]="editingTask?.title"
               (ngModelChange)="updateField('title', $event)"
               placeholder="Sin título"
               class="w-full bg-transparent text-2xl font-bold text-white placeholder-neutral-700 border-none outline-none focus:ring-0 focus:outline-none p-0"
@@ -226,7 +227,7 @@ type EditableTaskField =
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Prioridad</span>
               <select
-                [ngModel]="selectedTask()?.prioridad"
+                [ngModel]="editingTask?.prioridad"
                 (ngModelChange)="updateField('prioridad', $event)"
                 class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full cursor-pointer"
               >
@@ -243,7 +244,7 @@ type EditableTaskField =
               <span class="text-xs text-neutral-500 font-medium">Fecha</span>
               <input
                 type="date"
-                [ngModel]="selectedTask()?.fecha"
+                [ngModel]="editingTask?.fecha"
                 (ngModelChange)="updateField('fecha', $event)"
                 class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
@@ -254,7 +255,7 @@ type EditableTaskField =
               <span class="text-xs text-neutral-500 font-medium">Proyecto</span>
               <input
                 type="text"
-                [ngModel]="selectedTask()?.proyecto"
+                [ngModel]="editingTask?.proyecto"
                 (ngModelChange)="updateField('proyecto', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
@@ -266,7 +267,7 @@ type EditableTaskField =
               <span class="text-xs text-neutral-500 font-medium">Área</span>
               <input
                 type="text"
-                [ngModel]="selectedTask()?.area"
+                [ngModel]="editingTask?.area"
                 (ngModelChange)="updateField('area', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
@@ -278,7 +279,7 @@ type EditableTaskField =
               <span class="text-xs text-neutral-500 font-medium">Objetivo</span>
               <input
                 type="text"
-                [ngModel]="selectedTask()?.objetivo"
+                [ngModel]="editingTask?.objetivo"
                 (ngModelChange)="updateField('objetivo', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
@@ -290,7 +291,7 @@ type EditableTaskField =
               <span class="text-xs text-neutral-500 font-medium">Contexto</span>
               <input
                 type="text"
-                [ngModel]="selectedTask()?.contexto"
+                [ngModel]="editingTask?.contexto"
                 (ngModelChange)="updateField('contexto', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
@@ -302,7 +303,7 @@ type EditableTaskField =
               <span class="text-xs text-neutral-500 font-medium">URL</span>
               <input
                 type="text"
-                [ngModel]="selectedTask()?.url"
+                [ngModel]="editingTask?.url"
                 (ngModelChange)="updateField('url', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full font-mono"
@@ -314,7 +315,7 @@ type EditableTaskField =
           <div class="flex flex-col gap-1.5">
             <span class="text-xs text-neutral-500 font-medium">Descripción</span>
             <textarea
-              [ngModel]="selectedTask()?.descripcion"
+              [ngModel]="editingTask?.descripcion"
               (ngModelChange)="updateField('descripcion', $event)"
               placeholder="Escribe para añadir detalles sobre esta tarea..."
               rows="6"
@@ -325,8 +326,8 @@ type EditableTaskField =
           <!-- Bottom dates and actions -->
           <div class="mt-4 pt-3 border-t border-neutral-800/60 flex items-center justify-between text-[11px] text-neutral-600">
             <div class="flex flex-col gap-0.5">
-              <span>Creado: {{ formatDate(selectedTask()!.created_at) }}</span>
-              <span>Editado: {{ formatDate(selectedTask()!.edited) }}</span>
+              <span>Creado: {{ formatDate(editingTask?.created_at) }}</span>
+              <span>Editado: {{ formatDate(editingTask?.edited) }}</span>
             </div>
             <div class="flex items-center gap-2">
               <button
@@ -425,6 +426,7 @@ type EditableTaskField =
 })
 export class KanbanBoardTaskComponent implements OnInit {
   private readonly taskService = inject(TaskService);
+  private readonly cdr = inject(ChangeDetectorRef);
 
   // ── State ──────────────────────────────────────────────────────────
   columns: Column[] = [
@@ -435,6 +437,7 @@ export class KanbanBoardTaskComponent implements OnInit {
   ];
 
   selectedTask = signal<Task | null>(null);
+  editingTask: Task | null = null;
   activePill = signal<string>('todas');
 
   filterPills: FilterPill[] = [
@@ -498,11 +501,16 @@ export class KanbanBoardTaskComponent implements OnInit {
   onTaskClick(task: Task): void {
     if (this.isDragging) return;
     this.selectedTask.set(task);
+    this.editingTask = { ...task };
   }
 
   // ── Dialog ─────────────────────────────────────────────────────────
   closeDialog(): void {
+    if (this.editingTask) {
+      void this.persistTask(this.editingTask);
+    }
     this.selectedTask.set(null);
+    this.editingTask = null;
   }
 
   // ── Add Task ───────────────────────────────────────────────────────
@@ -525,28 +533,16 @@ export class KanbanBoardTaskComponent implements OnInit {
 
   // ── Helpers ────────────────────────────────────────────────────────
   updateField(field: EditableTaskField, value: string): void {
-    const task = this.selectedTask();
-    if (task) {
-      if (field === 'title') {
-        task.title = value;
-      } else if (field === 'prioridad') {
-        task.prioridad = this.parsePriority(value);
-      } else {
-        task[field] = value === '' ? undefined : value;
-      }
-      task.edited = new Date().toISOString();
-      this.selectedTask.set({ ...task });
+    if (!this.editingTask) return;
 
-      // Update the task in memory list to keep board in sync
-      for (const col of this.columns) {
-        const index = col.tasks.findIndex(t => t.id === task.id);
-        if (index !== -1) {
-          col.tasks[index] = { ...task };
-          break;
-        }
-      }
-      void this.persistTask(task);
+    if (field === 'title') {
+      this.editingTask.title = value;
+    } else if (field === 'prioridad') {
+      this.editingTask.prioridad = this.parsePriority(value);
+    } else {
+      (this.editingTask as unknown as Record<string, unknown>)[field] = value === '' ? undefined : value;
     }
+    this.editingTask.edited = new Date().toISOString();
   }
 
   async deleteSelectedTask(): Promise<void> {
@@ -632,10 +628,12 @@ export class KanbanBoardTaskComponent implements OnInit {
     try {
       const tasks = await this.taskService.getTasks();
       this.populateColumns(tasks);
+      this.cdr.detectChanges();
       this.taskCounter = tasks.length;
     } catch (error) {
       console.error('No se pudieron cargar las tareas', error);
       this.populateColumns([]);
+      this.cdr.detectChanges();
     }
   }
 
@@ -675,13 +673,8 @@ export class KanbanBoardTaskComponent implements OnInit {
     try {
       const updatedTask = await this.taskService.updateTask(task);
       this.replaceTask(updatedTask);
-      const selectedTask = this.selectedTask();
-      if (selectedTask?.id === updatedTask.id) {
-        this.selectedTask.set({ ...updatedTask });
-      }
     } catch (error) {
       console.error('No se pudo actualizar la tarea', error);
-      await this.loadTasks();
     }
   }
 

@@ -1,8 +1,10 @@
 import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   OnInit,
+  inject,
   signal,
-  ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -12,20 +14,17 @@ import {
   moveItemInArray,
   transferArrayItem,
 } from '@angular/cdk/drag-drop';
+import { ProjectService } from './project.service';
 
 export type ProjectStatus = 'not_started' | 'in_progress' | 'completed';
-
 export type ProjectPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
 
 export interface ProjectItem {
-  // Mandatory fields
   id: string;
   title: string;
   status: ProjectStatus;
   created_at: string;
   edited: string;
-
-  // Optional fields
   area?: string;
   parentProject?: string;
   timeline?: string;
@@ -46,21 +45,27 @@ interface FilterPill {
   key: string;
 }
 
+type EditableProjectField =
+  | 'title'
+  | 'area'
+  | 'parentProject'
+  | 'timeline'
+  | 'prioridad'
+  | 'archivo'
+  | 'startDate'
+  | 'goalArea';
+
 @Component({
   selector: 'app-kanban-board-projects',
   standalone: true,
   imports: [CommonModule, DragDropModule, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Root layout -->
     <div class="flex flex-col bg-[#191919] text-white">
-
-      <!-- ─── HEADER ─────────────────────────────────────────────── -->
       <header class="flex-shrink-0 px-6 pt-6 pb-4">
         <h1 class="text-2xl font-bold text-white tracking-tight">Proyectos</h1>
         <p class="text-sm text-gray-400 mb-4 mt-1">Gestión de proyectos</p>
 
-        <!-- Filter pills -->
         <div class="flex flex-wrap gap-2">
           @for (pill of filterPills; track pill.key) {
             <button
@@ -76,7 +81,6 @@ interface FilterPill {
         </div>
       </header>
 
-      <!-- ─── KANBAN BOARD ───────────────────────────────────────── -->
       <main class="flex-1 overflow-x-auto">
         <div
           cdkDropListGroup
@@ -85,8 +89,6 @@ interface FilterPill {
         >
           @for (column of columns; track column.id) {
             <div class="flex flex-col w-72 flex-shrink-0 bg-neutral-900 rounded-xl p-3">
-
-              <!-- Column header -->
               <div class="flex justify-between items-center mb-3 px-1">
                 <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">
                   {{ column.title }}
@@ -96,7 +98,6 @@ interface FilterPill {
                 </span>
               </div>
 
-              <!-- Drop list -->
               <div
                 cdkDropList
                 [cdkDropListData]="column.projects"
@@ -116,7 +117,6 @@ interface FilterPill {
                            hover:bg-neutral-750 hover:border-neutral-600
                            transition-all duration-150 group"
                   >
-                    <!-- Drag handle indicator -->
                     <div class="flex items-start gap-2">
                       <div class="flex flex-col gap-[3px] mt-1 opacity-0 group-hover:opacity-40 transition-opacity duration-150 flex-shrink-0">
                         <span class="block w-[14px] h-[2px] rounded bg-gray-400"></span>
@@ -126,25 +126,21 @@ interface FilterPill {
                       <p class="text-sm text-gray-300 leading-relaxed flex-1">{{ project.title }}</p>
                     </div>
 
-                    <!-- Status badge -->
                     <div class="mt-2 flex">
                       <span [class]="getStatusBadgeClass(project.status)">
                         {{ getStatusLabel(project.status) }}
                       </span>
                     </div>
 
-                    <!-- CDK Drag Preview -->
                     <div *cdkDragPreview class="drag-preview bg-neutral-700 rounded-lg p-3 w-72 shadow-2xl shadow-black/60 border border-neutral-600">
                       <p class="text-sm text-gray-200">{{ project.title }}</p>
                     </div>
 
-                    <!-- CDK Drag Placeholder -->
                     <div *cdkDragPlaceholder class="drag-placeholder bg-neutral-800/40 rounded-lg border-2 border-dashed border-neutral-600 h-16"></div>
                   </div>
                 }
               </div>
 
-              <!-- Add task button -->
               <button
                 (click)="addProject(column.id)"
                 class="mt-3 w-full py-2 px-3 rounded-lg text-sm text-gray-500
@@ -163,27 +159,23 @@ interface FilterPill {
       </main>
     </div>
 
-    <!-- ─── DIALOG ─────────────────────────────────────────────────── -->
-    @if (selectedProject()) {
-      <!-- Overlay -->
+    @if (editingProject) {
       <div
         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
         (click)="closeDialog()"
         role="dialog"
         aria-modal="true"
       >
-        <!-- Card (stop propagation so clicks inside don't close) -->
         <div
           class="bg-neutral-900 border border-neutral-800 rounded-xl p-6 w-full max-w-xl shadow-2xl shadow-black/80
                  max-h-[90vh] overflow-y-auto flex flex-col gap-4 animate-dialog-in"
           (click)="$event.stopPropagation()"
         >
-          <!-- Top metadata row (ID, status badge, dates) -->
           <div class="flex items-center justify-between text-xs text-neutral-500 border-b border-neutral-800 pb-3">
             <div class="flex items-center gap-2">
-              <span class="font-mono text-neutral-600">ID: {{ selectedProject()!.id }}</span>
-              <span class="w-1.5 h-1.5 rounded-full" [class]="getStatusDotClass(selectedProject()!.status)"></span>
-              <span class="font-medium text-neutral-400">{{ getStatusLabel(selectedProject()!.status) }}</span>
+              <span class="font-mono text-neutral-600">ID: {{ editingProject!.id }}</span>
+              <span class="w-1.5 h-1.5 rounded-full" [class]="getStatusDotClass(editingProject!.status)"></span>
+              <span class="font-medium text-neutral-400">{{ getStatusLabel(editingProject!.status) }}</span>
             </div>
             <button
               (click)="closeDialog()"
@@ -196,30 +188,26 @@ interface FilterPill {
             </button>
           </div>
 
-          <!-- Title Input (Principal Grande) -->
           <div class="mt-1">
             <input
               type="text"
-              [ngModel]="selectedProject()?.title"
+              [ngModel]="editingProject?.title"
               (ngModelChange)="updateField('title', $event)"
               placeholder="Sin título"
               class="w-full bg-transparent text-2xl font-bold text-white placeholder-neutral-700 border-none outline-none focus:ring-0 focus:outline-none p-0"
             />
           </div>
 
-          <!-- Properties Grid -->
           <div class="flex flex-col gap-3 py-3 border-y border-neutral-800/65">
-            <!-- Status (read-only to avoid breaking drag-and-drop mechanics) -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Status</span>
-              <span class="text-sm text-neutral-200 px-2 py-1">{{ getStatusLabel(selectedProject()!.status) }}</span>
+              <span class="text-sm text-neutral-200 px-2 py-1">{{ getStatusLabel(editingProject!.status) }}</span>
             </div>
 
-            <!-- Prioridad -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Prioridad</span>
               <select
-                [ngModel]="selectedProject()?.prioridad"
+                [ngModel]="editingProject?.prioridad"
                 (ngModelChange)="updateField('prioridad', $event)"
                 class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full cursor-pointer"
               >
@@ -231,72 +219,66 @@ interface FilterPill {
               </select>
             </div>
 
-            <!-- Area -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Area</span>
               <input
                 type="text"
-                [ngModel]="selectedProject()?.area"
+                [ngModel]="editingProject?.area"
                 (ngModelChange)="updateField('area', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
             </div>
 
-            <!-- Parent Project -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Parent Project</span>
               <input
                 type="text"
-                [ngModel]="selectedProject()?.parentProject"
+                [ngModel]="editingProject?.parentProject"
                 (ngModelChange)="updateField('parentProject', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
             </div>
 
-            <!-- Timeline -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Timeline</span>
               <input
                 type="text"
-                [ngModel]="selectedProject()?.timeline"
+                [ngModel]="editingProject?.timeline"
                 (ngModelChange)="updateField('timeline', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
             </div>
 
-            <!-- Start Date -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Start Date</span>
               <input
                 type="date"
-                [ngModel]="selectedProject()?.startDate"
+                [ngModel]="editingProject?.startDate"
                 (ngModelChange)="updateField('startDate', $event)"
                 class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
             </div>
 
-            <!-- Goal Area -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Goal Area</span>
               <input
                 type="text"
-                [ngModel]="selectedProject()?.goalArea"
+                [ngModel]="editingProject?.goalArea"
                 (ngModelChange)="updateField('goalArea', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
             </div>
 
-            <!-- Archivo (checkbox) -->
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Archivo</span>
               <label class="flex items-center cursor-pointer px-2 py-1">
                 <input
                   type="checkbox"
-                  [ngModel]="selectedProject()?.archivo"
+                  [ngModel]="editingProject?.archivo"
                   (ngModelChange)="updateField('archivo', $event)"
                   class="w-4 h-4 rounded border-neutral-600 bg-neutral-900 text-blue-500 focus:ring-offset-neutral-900 focus:ring-neutral-700 cursor-pointer accent-blue-500"
                 />
@@ -304,11 +286,10 @@ interface FilterPill {
             </div>
           </div>
 
-          <!-- Bottom dates and actions -->
           <div class="mt-4 pt-3 border-t border-neutral-800/60 flex items-center justify-between text-[11px] text-neutral-600">
             <div class="flex flex-col gap-0.5">
-              <span>Creado: {{ formatDate(selectedProject()!.created_at) }}</span>
-              <span>Editado: {{ formatDate(selectedProject()!.edited) }}</span>
+              <span>Creado: {{ formatDate(editingProject?.created_at) }}</span>
+              <span>Editado: {{ formatDate(editingProject?.edited) }}</span>
             </div>
             <button
               (click)="closeDialog()"
@@ -326,8 +307,6 @@ interface FilterPill {
       display: block;
       width: 100%;
     }
-
-    /* ── CDK Drag ─────────────────────────── */
 
     .cdk-drag-preview {
       box-sizing: border-box;
@@ -348,18 +327,13 @@ interface FilterPill {
       opacity: 1;
     }
 
-    /* Prevent placeholder from collapsing */
     .cdk-drop-list-dragging .drag-placeholder {
       display: block;
     }
 
-    /* ── Card hover tweak ─────────────────── */
-
     .task-card:hover {
       background-color: #2a2a2a;
     }
-
-    /* ── Dialog animation ─────────────────── */
 
     @keyframes dialogIn {
       from {
@@ -375,8 +349,6 @@ interface FilterPill {
     .animate-dialog-in {
       animation: dialogIn 150ms cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
     }
-
-    /* ── Scrollbar styling ────────────────── */
 
     ::-webkit-scrollbar {
       width: 4px;
@@ -398,7 +370,9 @@ interface FilterPill {
   `],
 })
 export class KanbanBoardProjectsComponent implements OnInit {
-  // ── State ──────────────────────────────────────────────────────────
+  private readonly projectService = inject(ProjectService);
+  private readonly cdr = inject(ChangeDetectorRef);
+
   columns: ProjectColumn[] = [
     { id: 'not_started', title: 'Not Started', projects: [] },
     { id: 'in_progress', title: 'In Progress', projects: [] },
@@ -406,6 +380,7 @@ export class KanbanBoardProjectsComponent implements OnInit {
   ];
 
   selectedProject = signal<ProjectItem | null>(null);
+  editingProject: ProjectItem | null = null;
   activePill = signal<string>('status');
 
   filterPills: FilterPill[] = [
@@ -418,34 +393,18 @@ export class KanbanBoardProjectsComponent implements OnInit {
     { label: 'Proyectos', key: 'proyectos' },
   ];
 
-  /** Flag to differentiate drag from click */
   private isDragging = false;
   private projectCounter = 0;
 
-  // ── Lifecycle ──────────────────────────────────────────────────────
   ngOnInit(): void {
-    const now = new Date().toISOString();
-    this.columns[0].projects = [
-      { id: this.generateId(), title: 'Definir requerimientos MVP', status: 'not_started', created_at: now, edited: now },
-      { id: this.generateId(), title: 'Investigación de mercado', status: 'not_started', created_at: now, edited: now },
-    ];
-
-    this.columns[1].projects = [
-      { id: this.generateId(), title: 'Desarrollo de API principal', status: 'in_progress', created_at: now, edited: now },
-    ];
-
-    this.columns[2].projects = [
-      { id: this.generateId(), title: 'Diseño de la base de datos', status: 'completed', created_at: now, edited: now },
-    ];
+    void this.loadProjects();
   }
 
-  // ── Drag & Drop ────────────────────────────────────────────────────
   onDragStarted(): void {
     this.isDragging = true;
   }
 
   onDragEnded(): void {
-    // Use setTimeout to let the click event fire first (if any), then reset
     setTimeout(() => {
       this.isDragging = false;
     }, 50);
@@ -453,85 +412,91 @@ export class KanbanBoardProjectsComponent implements OnInit {
 
   onDrop(event: CdkDragDrop<ProjectItem[]>, targetColumnId: ProjectStatus): void {
     if (event.previousContainer === event.container) {
-      moveItemInArray(
-        event.container.data,
-        event.previousIndex,
-        event.currentIndex,
-      );
-    } else {
-      transferArrayItem(
-        event.previousContainer.data,
-        event.container.data,
-        event.previousIndex,
-        event.currentIndex,
-      );
-      // Update status and edited date of moved project
+      moveItemInArray(event.container.data, event.previousIndex, event.currentIndex);
       const project = event.container.data[event.currentIndex];
-      project.status = targetColumnId;
       project.edited = new Date().toISOString();
+      void this.persistProject(project);
+      return;
     }
+
+    transferArrayItem(
+      event.previousContainer.data,
+      event.container.data,
+      event.previousIndex,
+      event.currentIndex,
+    );
+
+    const project = event.container.data[event.currentIndex];
+    project.status = targetColumnId;
+    project.edited = new Date().toISOString();
+    void this.persistProject(project);
   }
 
-  // ── Click vs Drag ──────────────────────────────────────────────────
   onProjectClick(project: ProjectItem): void {
     if (this.isDragging) return;
     this.selectedProject.set(project);
+    this.editingProject = { ...project };
   }
 
-  // ── Dialog ─────────────────────────────────────────────────────────
   closeDialog(): void {
+    if (this.editingProject) {
+      void this.persistProject(this.editingProject);
+    }
     this.selectedProject.set(null);
+    this.editingProject = null;
   }
 
-  // ── Add Project ───────────────────────────────────────────────────────
   addProject(columnId: ProjectStatus): void {
     this.projectCounter++;
-    const column = this.columns.find((c) => c.id === columnId);
-    if (column) {
-      const now = new Date().toISOString();
-      column.projects.push({
-        id: this.generateId(),
-        title: `Nuevo proyecto ${this.projectCounter}`,
-        status: columnId,
-        created_at: now,
-        edited: now,
-      });
-    }
+    const column = this.columns.find((item) => item.id === columnId);
+    if (!column) return;
+
+    const now = new Date().toISOString();
+    const newProject: ProjectItem = {
+      id: this.generateId(),
+      title: `Nuevo proyecto ${this.projectCounter}`,
+      status: columnId,
+      created_at: now,
+      edited: now,
+      archivo: false,
+    };
+
+    column.projects.push(newProject);
+    void this.createProject(newProject);
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────
-  updateField(field: keyof ProjectItem, value: any): void {
-    const project = this.selectedProject();
-    if (project) {
-      (project as any)[field] = value === '' ? undefined : value;
-      project.edited = new Date().toISOString();
-      this.selectedProject.set({ ...project });
+  updateField(field: EditableProjectField, value: string | boolean): void {
+    if (!this.editingProject) return;
 
-      // Update the project in memory list to keep board in sync
-      for (const col of this.columns) {
-        const index = col.projects.findIndex(p => p.id === project.id);
-        if (index !== -1) {
-          col.projects[index] = { ...project };
-          break;
-        }
-      }
+    switch (field) {
+      case 'title':
+        this.editingProject.title = String(value);
+        break;
+      case 'archivo':
+        this.editingProject.archivo = Boolean(value);
+        break;
+      case 'prioridad':
+        this.editingProject.prioridad = this.parsePriority(String(value));
+        break;
+      default:
+        (this.editingProject as unknown as Record<string, unknown>)[field] = String(value).trim() === '' ? undefined : String(value);
+        break;
     }
+
+    this.editingProject.edited = new Date().toISOString();
   }
 
   formatDate(isoString?: string): string {
     if (!isoString) return '';
-    try {
-      const date = new Date(isoString);
-      return date.toLocaleString('es-ES', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return isoString;
-    }
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return isoString;
+    return date.toLocaleString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
 
   getStatusLabel(status: ProjectStatus): string {
@@ -560,6 +525,72 @@ export class KanbanBoardProjectsComponent implements OnInit {
       completed: 'bg-green-400',
     };
     return dots[status];
+  }
+
+  private async loadProjects(): Promise<void> {
+    try {
+      const projects = await this.projectService.getAll();
+      this.populateColumns(projects);
+      this.cdr.detectChanges();
+      this.projectCounter = projects.length;
+    } catch (error) {
+      console.error('No se pudieron cargar los proyectos', error);
+      this.populateColumns([]);
+      this.cdr.detectChanges();
+    }
+  }
+
+  private populateColumns(projects: ProjectItem[]): void {
+    const nextColumns: ProjectColumn[] = [
+      { id: 'not_started', title: 'Not Started', projects: [] },
+      { id: 'in_progress', title: 'In Progress', projects: [] },
+      { id: 'completed', title: 'Completed', projects: [] },
+    ];
+
+    for (const project of projects) {
+      const column = nextColumns.find((item) => item.id === project.status);
+      if (column) {
+        column.projects.push(project);
+      }
+    }
+
+    this.columns = nextColumns;
+  }
+
+  private async createProject(project: ProjectItem): Promise<void> {
+    try {
+      const createdProject = await this.projectService.create(project);
+      this.replaceProject(createdProject);
+    } catch (error) {
+      console.error('No se pudo crear el proyecto', error);
+      await this.loadProjects();
+    }
+  }
+
+  private async persistProject(project: ProjectItem): Promise<void> {
+    try {
+      const updatedProject = await this.projectService.update(project);
+      this.replaceProject(updatedProject);
+    } catch (error) {
+      console.error('No se pudo actualizar el proyecto', error);
+    }
+  }
+
+  private replaceProject(nextProject: ProjectItem): void {
+    for (const column of this.columns) {
+      const index = column.projects.findIndex((project) => project.id === nextProject.id);
+      if (index !== -1) {
+        column.projects[index] = { ...nextProject };
+        return;
+      }
+    }
+  }
+
+  private parsePriority(value: string): ProjectPriority | undefined {
+    if (value === 'Low' || value === 'Medium' || value === 'High' || value === 'Urgent') {
+      return value;
+    }
+    return undefined;
   }
 
   private generateId(): string {

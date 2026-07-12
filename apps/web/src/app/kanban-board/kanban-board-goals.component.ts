@@ -1,8 +1,10 @@
 import {
   ChangeDetectionStrategy,
+  ChangeDetectorRef,
   Component,
   OnInit,
   computed,
+  inject,
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -14,6 +16,8 @@ import {
   transferArrayItem,
 } from '@angular/cdk/drag-drop';
 import type { AreaItem } from './kanban-board-areas.component';
+import { AreaService } from './area.service';
+import { GoalService } from './goal.service';
 
 export type GoalStatus = 'No empezado' | 'En progreso' | 'Completo';
 
@@ -158,7 +162,7 @@ type EditableGoalField =
       }
     </div>
 
-    @if (selectedGoalContext()) {
+@if (editingGoal) {
       <div
         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
         (click)="closeDialog()"
@@ -171,7 +175,7 @@ type EditableGoalField =
           (click)="$event.stopPropagation()"
         >
           <div class="flex items-center justify-between text-xs text-neutral-500 border-b border-neutral-800 pb-3">
-            <span class="font-mono text-neutral-600">ID: {{ selectedGoalContext()!.goal.id }}</span>
+            <span class="font-mono text-neutral-600">ID: {{ editingGoal!.id }}</span>
             <button
               (click)="closeDialog()"
               class="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-250 hover:bg-neutral-800 transition-all duration-150"
@@ -186,7 +190,7 @@ type EditableGoalField =
           <div class="mt-1">
             <input
               type="text"
-              [ngModel]="selectedGoalContext()!.goal.title"
+              [ngModel]="editingGoal?.title"
               (ngModelChange)="updateField('title', $event)"
               placeholder="Sin título"
               class="w-full bg-transparent text-2xl font-bold text-white placeholder-neutral-700 border-none outline-none focus:ring-0 focus:outline-none p-0"
@@ -197,11 +201,11 @@ type EditableGoalField =
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Status</span>
               <select
-                [ngModel]="selectedGoalContext()!.goal.status"
+                [ngModel]="editingGoal?.status"
                 (ngModelChange)="updateField('status', $event)"
                 class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full cursor-pointer"
               >
-                <option value="No empezado" class="bg-neutral-900 text-neutral-300">No empezado</option>
+                <option value="No empezado" class="bg-neutral-900 text-neutral-300">No empezar</option>
                 <option value="En progreso" class="bg-neutral-900 text-neutral-300">En progreso</option>
                 <option value="Completo" class="bg-neutral-900 text-neutral-300">Completo</option>
               </select>
@@ -211,7 +215,7 @@ type EditableGoalField =
               <span class="text-xs text-neutral-500 font-medium">Deadline</span>
               <input
                 type="date"
-                [ngModel]="selectedGoalContext()!.goal.deadline"
+                [ngModel]="editingGoal?.deadline"
                 (ngModelChange)="updateField('deadline', $event)"
                 class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
               />
@@ -221,7 +225,7 @@ type EditableGoalField =
               <span class="text-xs text-neutral-500 font-medium">Countdown</span>
               <input
                 type="text"
-                [ngModel]="selectedGoalContext()!.goal.countdown"
+                [ngModel]="editingGoal?.countdown"
                 (ngModelChange)="updateField('countdown', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
@@ -232,7 +236,7 @@ type EditableGoalField =
               <span class="text-xs text-neutral-500 font-medium">Quarter</span>
               <input
                 type="text"
-                [ngModel]="selectedGoalContext()!.goal.quarter"
+                [ngModel]="editingGoal?.quarter"
                 (ngModelChange)="updateField('quarter', $event)"
                 placeholder="Vacío"
                 class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
@@ -244,7 +248,7 @@ type EditableGoalField =
               <label class="flex items-center cursor-pointer px-2 py-1">
                 <input
                   type="checkbox"
-                  [ngModel]="selectedGoalContext()!.goal.archivado"
+                  [ngModel]="editingGoal?.archivado"
                   (ngModelChange)="updateField('archivado', $event)"
                   class="w-4 h-4 rounded border-neutral-600 bg-neutral-900 text-blue-500 focus:ring-offset-neutral-900 focus:ring-neutral-700 cursor-pointer accent-blue-500"
                 />
@@ -253,14 +257,14 @@ type EditableGoalField =
 
             <div class="grid grid-cols-[120px_1fr] items-center gap-4">
               <span class="text-xs text-neutral-500 font-medium">Area</span>
-              <span class="text-sm text-neutral-300 px-2 py-1">{{ selectedGoalContext()!.goal.area }}</span>
+              <span class="text-sm text-neutral-300 px-2 py-1">{{ editingGoal!.area }}</span>
             </div>
           </div>
 
           <div class="mt-4 pt-3 border-t border-neutral-800/60 flex items-center justify-between text-[11px] text-neutral-600">
             <div class="flex flex-col gap-0.5">
-              <span>Creado: {{ formatDate(selectedGoalContext()!.goal.created_at) }}</span>
-              <span>Editado: {{ formatDate(selectedGoalContext()!.goal.edited) }}</span>
+              <span>Creado: {{ formatDate(editingGoal!.created_at) }}</span>
+              <span>Editado: {{ formatDate(editingGoal!.edited) }}</span>
             </div>
             <button
               (click)="closeDialog()"
@@ -341,9 +345,14 @@ type EditableGoalField =
   `],
 })
 export class KanbanBoardGoalsComponent implements OnInit {
+  private readonly areaService = inject(AreaService);
+  private readonly goalService = inject(GoalService);
+  private readonly cdr = inject(ChangeDetectorRef);
+
   readonly areas = signal<AreaItem[]>([]);
   readonly goalsByArea = signal<Record<string, GoalItem[]>>({});
   readonly selectedGoalContext = signal<{ goal: GoalItem; areaId: string } | null>(null);
+  editingGoal: GoalItem | null = null;
   readonly activePill = signal<string>('areas');
 
   readonly filterPills: FilterPill[] = [
@@ -360,40 +369,12 @@ export class KanbanBoardGoalsComponent implements OnInit {
     })),
   );
 
+  private allGoals: GoalItem[] = [];
   private isDragging = false;
   private goalCounter = 0;
 
   ngOnInit(): void {
-    const defaultAreas = this.buildDefaultAreas();
-    this.areas.set(defaultAreas);
-
-    const now = new Date().toISOString();
-    this.goalsByArea.set(
-      defaultAreas.reduce<Record<string, GoalItem[]>>((acc, area) => {
-        acc[area.id] = [];
-        return acc;
-      }, {}),
-    );
-
-    if (defaultAreas[0]) {
-      this.goalsByArea.update((current) => ({
-        ...current,
-        [defaultAreas[0].id]: [
-          {
-            id: this.generateId(),
-            title: 'Lanzar nueva landing',
-            area: defaultAreas[0].title,
-            created_at: now,
-            edited: now,
-            deadline: '',
-            countdown: '',
-            quarter: 'Q3',
-            status: 'No empezado',
-            archivado: false,
-          },
-        ],
-      }));
-    }
+    void this.loadData();
   }
 
   onDragStarted(): void {
@@ -406,17 +387,9 @@ export class KanbanBoardGoalsComponent implements OnInit {
     }, 50);
   }
 
-  onDrop(
-    event: CdkDragDrop<GoalItem[]>,
-    targetAreaId: string,
-    targetAreaTitle: string,
-  ): void {
+  onDrop(event: CdkDragDrop<GoalItem[]>, targetAreaId: string, targetAreaTitle: string): void {
     if (event.previousContainer === event.container) {
-      moveItemInArray(
-        event.container.data,
-        event.previousIndex,
-        event.currentIndex,
-      );
+      moveItemInArray(event.container.data, event.previousIndex, event.currentIndex);
       return;
     }
 
@@ -430,6 +403,7 @@ export class KanbanBoardGoalsComponent implements OnInit {
     const movedGoal = event.container.data[event.currentIndex];
     movedGoal.area = targetAreaTitle;
     movedGoal.edited = new Date().toISOString();
+    this.replaceGoal(movedGoal);
 
     const selectedContext = this.selectedGoalContext();
     if (selectedContext?.goal.id === movedGoal.id) {
@@ -438,15 +412,21 @@ export class KanbanBoardGoalsComponent implements OnInit {
         areaId: targetAreaId,
       });
     }
+    void this.persistGoal(movedGoal);
   }
 
   onGoalClick(goal: GoalItem, areaId: string): void {
     if (this.isDragging) return;
     this.selectedGoalContext.set({ goal: { ...goal }, areaId });
+    this.editingGoal = { ...goal };
   }
 
   closeDialog(): void {
+    if (this.editingGoal) {
+      void this.persistGoal(this.editingGoal);
+    }
     this.selectedGoalContext.set(null);
+    this.editingGoal = null;
   }
 
   addGoal(areaId: string): void {
@@ -468,43 +448,21 @@ export class KanbanBoardGoalsComponent implements OnInit {
       archivado: false,
     };
 
-    this.goalsByArea.update((current) => ({
-      ...current,
-      [areaId]: [...(current[areaId] ?? []), newGoal],
-    }));
+    this.allGoals = [...this.allGoals, newGoal];
+    this.rebuildGoalsByArea();
+    void this.createGoal(newGoal);
   }
 
-  updateField<K extends EditableGoalField>(
-    field: K,
-    value: GoalItem[K],
-  ): void {
-    const context = this.selectedGoalContext();
-    if (!context) return;
+  updateField<K extends EditableGoalField>(field: K, value: GoalItem[K]): void {
+    if (!this.editingGoal) return;
 
-    const updatedGoal: GoalItem = {
-      ...context.goal,
-      [field]: value,
-      edited: new Date().toISOString(),
-    };
-
-    this.selectedGoalContext.set({
-      goal: updatedGoal,
-      areaId: context.areaId,
-    });
-
-    this.goalsByArea.update((current) => ({
-      ...current,
-      [context.areaId]: (current[context.areaId] ?? []).map((goal) =>
-        goal.id === updatedGoal.id ? updatedGoal : goal,
-      ),
-    }));
+    this.editingGoal[field] = value;
+    this.editingGoal.edited = new Date().toISOString();
   }
 
   formatDate(isoString: string): string {
     const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) {
-      return isoString;
-    }
+    if (Number.isNaN(date.getTime())) return isoString;
     return date.toLocaleString('es-ES', {
       day: '2-digit',
       month: '2-digit',
@@ -514,49 +472,69 @@ export class KanbanBoardGoalsComponent implements OnInit {
     });
   }
 
-  private buildDefaultAreas(): AreaItem[] {
-    return [
-      {
-        id: this.generateAreaId(),
-        title: 'Desarrollo de Software',
-        type: 'Empresa',
-        archivado: false,
-      },
-      {
-        id: this.generateAreaId(),
-        title: 'Finanzas Personales',
-        type: 'Personal',
-        archivado: false,
-      },
-      {
-        id: this.generateAreaId(),
-        title: 'Tesis Doctoral',
-        type: 'Academico',
-        archivado: false,
-      },
-      {
-        id: this.generateAreaId(),
-        title: 'Gimnasio y Salud',
-        type: 'Personal',
-        archivado: false,
-      },
-      {
-        id: this.generateAreaId(),
-        title: 'Investigación IA',
-        type: 'Academico',
-        archivado: false,
-      },
-      {
-        id: this.generateAreaId(),
-        title: 'Marketing Digital',
-        type: 'Empresa',
-        archivado: false,
-      },
-    ];
+  private async loadData(): Promise<void> {
+    try {
+      const [areas, goals] = await Promise.all([
+        this.areaService.getAll(),
+        this.goalService.getAll(),
+      ]);
+      this.areas.set(areas);
+      this.allGoals = goals;
+      this.goalCounter = goals.length;
+      this.rebuildGoalsByArea();
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('No se pudieron cargar goals/areas', error);
+      this.areas.set([]);
+      this.allGoals = [];
+      this.goalsByArea.set({});
+      this.cdr.detectChanges();
+    }
   }
 
-  private generateAreaId(): string {
-    return `goal-area-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  private rebuildGoalsByArea(): void {
+    const map = this.areas().reduce<Record<string, GoalItem[]>>((acc, area) => {
+      acc[area.id] = this.allGoals.filter((goal) => goal.area === area.title);
+      return acc;
+    }, {});
+    this.goalsByArea.set(map);
+  }
+
+  private replaceGoal(nextGoal: GoalItem): void {
+    this.allGoals = this.allGoals.map((goal) =>
+      goal.id === nextGoal.id ? { ...nextGoal } : goal,
+    );
+    this.rebuildGoalsByArea();
+  }
+
+  private async createGoal(goal: GoalItem): Promise<void> {
+    try {
+      const createdGoal = await this.goalService.create(goal);
+      this.replaceGoal(createdGoal);
+    } catch (error) {
+      console.error('No se pudo crear el goal', error);
+      await this.loadData();
+    }
+  }
+
+  private async persistGoal(goal: GoalItem): Promise<void> {
+    try {
+      const updatedGoal = await this.goalService.update(goal);
+      this.replaceGoal(updatedGoal);
+      const selectedContext = this.selectedGoalContext();
+      if (selectedContext?.goal.id === updatedGoal.id) {
+        const areaId =
+          this.areas().find((area) => area.title === updatedGoal.area)?.id ??
+          selectedContext.areaId;
+        this.selectedGoalContext.set({
+          goal: { ...updatedGoal },
+          areaId,
+        });
+      }
+    } catch (error) {
+      console.error('No se pudo actualizar el goal', error);
+      await this.loadData();
+    }
   }
 
   private generateId(): string {
