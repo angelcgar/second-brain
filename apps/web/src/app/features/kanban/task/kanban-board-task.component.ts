@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 import {
   CdkDragDrop,
   DragDropModule,
@@ -15,7 +16,18 @@ import {
   transferArrayItem,
 } from '@angular/cdk/drag-drop';
 import { TaskService } from '../../../core/services/task.service';
-import type { Column, Priority, Task, TaskStatus } from '../../../shared/models';
+import { AreaService } from '../../../core/services/area.service';
+import { ProjectService } from '../../../core/services/project.service';
+import { GoalService } from '../../../core/services/goal.service';
+import type {
+  AreaItem,
+  Column,
+  GoalItem,
+  Priority,
+  ProjectItem,
+  Task,
+  TaskStatus,
+} from '../../../shared/models';
 
 type EditableTaskField =
   | 'title'
@@ -43,6 +55,9 @@ interface FilterPill {
 })
 export class KanbanBoardTaskComponent implements OnInit {
   private readonly taskService = inject(TaskService);
+  private readonly areaService = inject(AreaService);
+  private readonly projectService = inject(ProjectService);
+  private readonly goalService = inject(GoalService);
   private readonly cdr = inject(ChangeDetectorRef);
 
   // ── State ──────────────────────────────────────────────────────────
@@ -52,6 +67,10 @@ export class KanbanBoardTaskComponent implements OnInit {
     { id: 'sin_fecha', title: 'Sin fecha', tasks: [] },
     { id: 'en_proceso', title: 'En proceso', tasks: [] },
   ];
+
+  areas: AreaItem[] = [];
+  projects: ProjectItem[] = [];
+  goals: GoalItem[] = [];
 
   selectedTask = signal<Task | null>(null);
   editingTask: Task | null = null;
@@ -70,10 +89,21 @@ export class KanbanBoardTaskComponent implements OnInit {
   /** Flag to differentiate drag from click */
   private isDragging = false;
   private taskCounter = 0;
+  private items: Task[] = [];
 
   // ── Lifecycle ──────────────────────────────────────────────────────
   ngOnInit(): void {
     void this.loadTasks();
+    forkJoin({
+      areas: this.areaService.getAll(),
+      projects: this.projectService.getAll(),
+      goals: this.goalService.getAll(),
+    }).subscribe(({ areas, projects, goals }) => {
+      this.areas = areas.filter((a) => !a.archivado);
+      this.projects = projects.filter((p) => !p.archivo);
+      this.goals = goals.filter((g) => !g.archivado);
+      this.cdr.detectChanges();
+    });
   }
 
   // ── Drag & Drop ────────────────────────────────────────────────────
@@ -89,11 +119,7 @@ export class KanbanBoardTaskComponent implements OnInit {
 
   onDrop(event: CdkDragDrop<Task[]>, targetColumnId: TaskStatus): void {
     if (event.previousContainer === event.container) {
-      moveItemInArray(
-        event.container.data,
-        event.previousIndex,
-        event.currentIndex,
-      );
+      moveItemInArray(event.container.data, event.previousIndex, event.currentIndex);
       const task = event.container.data[event.currentIndex];
       task.edited = new Date().toISOString();
       void this.persistTask(task);
@@ -131,46 +157,43 @@ export class KanbanBoardTaskComponent implements OnInit {
   // ── Add Task ───────────────────────────────────────────────────────
   addTask(columnId: TaskStatus): void {
     this.taskCounter++;
-    const column = this.columns.find((c) => c.id === columnId);
-    if (column) {
-      const now = new Date().toISOString();
-      const newTask: Task = {
-        id: this.generateId(),
-        title: `Nueva tarea ${this.taskCounter}`,
-        status: columnId,
-        created_at: now,
-        edited: now,
-      };
-      column.tasks.push(newTask);
-      void this.createTask(newTask);
-    }
+    const now = new Date().toISOString();
+    const newTask: Task = {
+      id: this.generateId(),
+      title: `Nueva tarea ${this.taskCounter}`,
+      status: columnId,
+      created_at: now,
+      edited: now,
+    };
+    void this.createTask(newTask);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────
   updateField(field: EditableTaskField, value: string): void {
     if (!this.editingTask) return;
 
+    const next: Task = { ...this.editingTask };
+
     if (field === 'title') {
-      this.editingTask.title = value;
+      next.title = value;
     } else if (field === 'prioridad') {
-      this.editingTask.prioridad = this.parsePriority(value);
+      next.prioridad = this.parsePriority(value);
     } else {
-      (this.editingTask as unknown as Record<string, unknown>)[field] = value === '' ? undefined : value;
+      (next as unknown as Record<string, unknown>)[field] =
+        value === '' ? undefined : value;
     }
-    this.editingTask.edited = new Date().toISOString();
+    next.edited = new Date().toISOString();
+
+    this.editingTask = next;
   }
 
   async deleteSelectedTask(): Promise<void> {
     const task = this.selectedTask();
     if (!task) return;
 
-    for (const col of this.columns) {
-      const index = col.tasks.findIndex((currentTask) => currentTask.id === task.id);
-      if (index !== -1) {
-        col.tasks.splice(index, 1);
-        break;
-      }
-    }
+    this.items = this.items.filter((t) => t.id !== task.id);
+    this.buildColumnsFromItems(this.items);
+    this.cdr.detectChanges();
 
     this.selectedTask.set(null);
     try {
@@ -190,7 +213,7 @@ export class KanbanBoardTaskComponent implements OnInit {
         month: '2-digit',
         year: 'numeric',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
       });
     } catch {
       return isoString;
@@ -242,17 +265,19 @@ export class KanbanBoardTaskComponent implements OnInit {
   private async loadTasks(): Promise<void> {
     try {
       const tasks = await this.taskService.getTasks();
-      this.populateColumns(tasks);
+      this.items = tasks;
+      this.buildColumnsFromItems(this.items);
       this.cdr.detectChanges();
       this.taskCounter = tasks.length;
     } catch (error) {
       console.error('No se pudieron cargar las tareas', error);
-      this.populateColumns([]);
+      this.items = [];
+      this.buildColumnsFromItems([]);
       this.cdr.detectChanges();
     }
   }
 
-  private populateColumns(tasks: Task[]): void {
+  private buildColumnsFromItems(tasks: Task[]): void {
     const nextColumns: Column[] = [
       { id: 'inbox', title: 'Inbox', tasks: [] },
       { id: 'esperando', title: 'Esperando', tasks: [] },
@@ -261,7 +286,7 @@ export class KanbanBoardTaskComponent implements OnInit {
     ];
 
     for (const task of tasks) {
-      const column = nextColumns.find((currentColumn) => currentColumn.id === task.status);
+      const column = nextColumns.find((col) => col.id === task.status);
       if (column) {
         column.tasks.push(task);
       }
@@ -273,7 +298,9 @@ export class KanbanBoardTaskComponent implements OnInit {
   private async createTask(task: Task): Promise<void> {
     try {
       const createdTask = await this.taskService.createTask(task);
-      this.replaceTask(createdTask);
+      this.items = [...this.items, createdTask];
+      this.buildColumnsFromItems(this.items);
+      this.cdr.detectChanges();
       const selectedTask = this.selectedTask();
       if (selectedTask?.id === createdTask.id) {
         this.selectedTask.set({ ...createdTask });
@@ -287,19 +314,11 @@ export class KanbanBoardTaskComponent implements OnInit {
   private async persistTask(task: Task): Promise<void> {
     try {
       const updatedTask = await this.taskService.updateTask(task);
-      this.replaceTask(updatedTask);
+      this.items = this.items.map((item) => (item.id === updatedTask.id ? updatedTask : item));
+      this.buildColumnsFromItems(this.items);
+      this.cdr.detectChanges();
     } catch (error) {
       console.error('No se pudo actualizar la tarea', error);
-    }
-  }
-
-  private replaceTask(nextTask: Task): void {
-    for (const col of this.columns) {
-      const index = col.tasks.findIndex((currentTask) => currentTask.id === nextTask.id);
-      if (index !== -1) {
-        col.tasks[index] = { ...nextTask };
-        return;
-      }
     }
   }
 }

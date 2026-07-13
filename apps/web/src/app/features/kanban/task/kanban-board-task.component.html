@@ -184,37 +184,46 @@
         <!-- Proyecto -->
         <div class="grid grid-cols-[120px_1fr] items-center gap-4">
           <span class="text-xs text-neutral-500 font-medium">Proyecto</span>
-          <input
-            type="text"
+          <select
             [ngModel]="editingTask?.proyecto"
             (ngModelChange)="updateField('proyecto', $event)"
-            placeholder="Vacío"
-            class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
-          />
+            class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full cursor-pointer"
+          >
+            <option value="" class="bg-neutral-900 text-neutral-500">Vacío</option>
+            @for (project of projects; track project.id) {
+              <option [value]="project.title" class="bg-neutral-900 text-neutral-300">{{ project.title }}</option>
+            }
+          </select>
         </div>
 
         <!-- Área -->
         <div class="grid grid-cols-[120px_1fr] items-center gap-4">
           <span class="text-xs text-neutral-500 font-medium">Área</span>
-          <input
-            type="text"
+          <select
             [ngModel]="editingTask?.area"
             (ngModelChange)="updateField('area', $event)"
-            placeholder="Vacío"
-            class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
-          />
+            class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full cursor-pointer"
+          >
+            <option value="" class="bg-neutral-900 text-neutral-500">Vacío</option>
+            @for (area of areas; track area.id) {
+              <option [value]="area.title" class="bg-neutral-900 text-neutral-300">{{ area.title }}</option>
+            }
+          </select>
         </div>
 
         <!-- Objetivo -->
         <div class="grid grid-cols-[120px_1fr] items-center gap-4">
           <span class="text-xs text-neutral-500 font-medium">Objetivo</span>
-          <input
-            type="text"
+          <select
             [ngModel]="editingTask?.objetivo"
             (ngModelChange)="updateField('objetivo', $event)"
-            placeholder="Vacío"
-            class="bg-transparent text-sm text-neutral-200 border border-transparent hover:border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full"
-          />
+            class="bg-transparent text-sm text-neutral-200 border border-neutral-800 focus:border-neutral-600 rounded px-2 py-1 outline-none transition-colors w-full cursor-pointer"
+          >
+            <option value="" class="bg-neutral-900 text-neutral-500">Vacío</option>
+            @for (goal of goals; track goal.id) {
+              <option [value]="goal.title" class="bg-neutral-900 text-neutral-300">{{ goal.title }}</option>
+            }
+          </select>
         </div>
 
         <!-- Contexto -->
