@@ -31,6 +31,7 @@ import type {
 
 type EditableTaskField =
   | 'title'
+  | 'status'
   | 'fecha'
   | 'objetivo'
   | 'proyecto'
@@ -66,6 +67,7 @@ export class KanbanBoardTaskComponent implements OnInit {
     { id: 'esperando', title: 'Esperando', tasks: [] },
     { id: 'sin_fecha', title: 'Sin fecha', tasks: [] },
     { id: 'en_proceso', title: 'En proceso', tasks: [] },
+    { id: 'delegada', title: 'Delegada', tasks: [] },
   ];
 
   areas: AreaItem[] = [];
@@ -75,6 +77,9 @@ export class KanbanBoardTaskComponent implements OnInit {
   selectedTask = signal<Task | null>(null);
   editingTask: Task | null = null;
   activePill = signal<string>('todas');
+
+  inlineEditingId = signal<string | null>(null);
+  inlineDraft = signal<string>('');
 
   filterPills: FilterPill[] = [
     { label: 'Hoy', key: 'hoy' },
@@ -145,6 +150,33 @@ export class KanbanBoardTaskComponent implements OnInit {
     this.editingTask = { ...task };
   }
 
+  // ── Inline title edit ──────────────────────────────────────────────
+  startInlineEdit(task: Task, event: MouseEvent): void {
+    if (this.isDragging) return;
+    event.stopPropagation();
+    this.inlineEditingId.set(task.id);
+    this.inlineDraft.set(task.title);
+  }
+
+  onInlineFocus(event: FocusEvent): void {
+    const el = event.target as HTMLInputElement;
+    el.select();
+  }
+
+  saveInlineEdit(task: Task): void {
+    const draft = this.inlineDraft().trim();
+    this.inlineEditingId.set(null);
+    this.inlineDraft.set('');
+    if (!draft || draft === task.title) return;
+    const updated: Task = { ...task, title: draft, edited: new Date().toISOString() };
+    void this.persistTask(updated);
+  }
+
+  cancelInlineEdit(): void {
+    this.inlineEditingId.set(null);
+    this.inlineDraft.set('');
+  }
+
   // ── Dialog ─────────────────────────────────────────────────────────
   closeDialog(): void {
     if (this.editingTask) {
@@ -176,6 +208,8 @@ export class KanbanBoardTaskComponent implements OnInit {
 
     if (field === 'title') {
       next.title = value;
+    } else if (field === 'status') {
+      next.status = value as TaskStatus;
     } else if (field === 'prioridad') {
       next.prioridad = this.parsePriority(value);
     } else {
@@ -226,6 +260,8 @@ export class KanbanBoardTaskComponent implements OnInit {
       esperando: 'Esperando',
       sin_fecha: 'Sin fecha',
       en_proceso: 'En proceso',
+      completado: 'Completado',
+      delegada: 'Delegada',
     };
     return labels[status];
   }
@@ -237,6 +273,8 @@ export class KanbanBoardTaskComponent implements OnInit {
       esperando: `${base} bg-yellow-950/60 text-yellow-400`,
       sin_fecha: `${base} bg-neutral-700/80 text-gray-400`,
       en_proceso: `${base} bg-green-950/60 text-green-400`,
+      completado: `${base} bg-emerald-950/60 text-emerald-400`,
+      delegada: `${base} bg-purple-950/60 text-purple-400`,
     };
     return variants[status];
   }
@@ -247,6 +285,8 @@ export class KanbanBoardTaskComponent implements OnInit {
       esperando: 'bg-yellow-400',
       sin_fecha: 'bg-gray-500',
       en_proceso: 'bg-green-400',
+      completado: 'bg-emerald-400',
+      delegada: 'bg-purple-400',
     };
     return dots[status];
   }
@@ -283,9 +323,11 @@ export class KanbanBoardTaskComponent implements OnInit {
       { id: 'esperando', title: 'Esperando', tasks: [] },
       { id: 'sin_fecha', title: 'Sin fecha', tasks: [] },
       { id: 'en_proceso', title: 'En proceso', tasks: [] },
+      { id: 'delegada', title: 'Delegada', tasks: [] },
     ];
 
     for (const task of tasks) {
+      if (task.status === 'completado') continue;
       const column = nextColumns.find((col) => col.id === task.status);
       if (column) {
         column.tasks.push(task);

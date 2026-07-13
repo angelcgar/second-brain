@@ -16,7 +16,7 @@ import { KanbanBoardAreasComponent } from './features/kanban/areas/kanban-board-
     KanbanBoardAreasComponent,
   ],
   template: `
-    <div class="min-h-screen w-screen bg-[#191919] flex flex-col overflow-y-auto overflow-x-hidden gap-8 pb-12">
+    <div class="min-h-screen bg-[#191919] flex flex-col overflow-y-auto overflow-x-hidden gap-8 pb-12">
       <app-kanban-board-task></app-kanban-board-task>
       <app-kanban-board-projects></app-kanban-board-projects>
       <app-kanban-board-goals></app-kanban-board-goals>
@@ -28,7 +28,7 @@ import { KanbanBoardAreasComponent } from './features/kanban/areas/kanban-board-
       :host {
         display: block;
         min-height: 100vh;
-        width: 100vw;
+        width: 100%;
       }
     `,
   ],

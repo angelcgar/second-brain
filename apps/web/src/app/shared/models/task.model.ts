@@ -1,4 +1,4 @@
-export type TaskStatus = 'inbox' | 'esperando' | 'sin_fecha' | 'en_proceso';
+export type TaskStatus = 'inbox' | 'esperando' | 'sin_fecha' | 'en_proceso' | 'completado' | 'delegada';
 
 export type Priority = 'Baja' | 'Media' | 'Alta' | 'Urgente';
 

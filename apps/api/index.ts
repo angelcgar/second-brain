@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 
-type TaskStatus = "inbox" | "esperando" | "sin_fecha" | "en_proceso";
+type TaskStatus = "inbox" | "esperando" | "sin_fecha" | "en_proceso" | "completado" | "delegada";
 type ProjectStatus = "not_started" | "in_progress" | "completed";
 type AreaType = "Empresa" | "Personal" | "Academico";
 type GoalStatus = "No empezado" | "En progreso" | "Completo";
@@ -169,6 +169,8 @@ const allowedTaskStatuses: TaskStatus[] = [
   "esperando",
   "sin_fecha",
   "en_proceso",
+  "completado",
+  "delegada",
 ];
 const allowedProjectStatuses: ProjectStatus[] = [
   "not_started",
