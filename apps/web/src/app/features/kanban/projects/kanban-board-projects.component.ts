@@ -54,6 +54,9 @@ export class KanbanBoardProjectsComponent implements OnInit {
   editingProject: ProjectItem | null = null;
   activePill = signal<string>('status');
 
+  inlineEditingId = signal<string | null>(null);
+  inlineDraft = signal<string>('');
+
   filterPills: FilterPill[] = [
     { label: 'Entrega', key: 'entrega' },
     { label: 'Lista', key: 'lista' },
@@ -107,6 +110,33 @@ export class KanbanBoardProjectsComponent implements OnInit {
     if (this.isDragging) return;
     this.selectedProject.set(project);
     this.editingProject = { ...project };
+  }
+
+  // ── Inline title edit ──────────────────────────────────────────────
+  startInlineEdit(project: ProjectItem, event: MouseEvent): void {
+    if (this.isDragging) return;
+    event.stopPropagation();
+    this.inlineEditingId.set(project.id);
+    this.inlineDraft.set(project.title);
+  }
+
+  onInlineFocus(event: FocusEvent): void {
+    const el = event.target as HTMLInputElement;
+    el.select();
+  }
+
+  saveInlineEdit(project: ProjectItem): void {
+    const draft = this.inlineDraft().trim();
+    this.inlineEditingId.set(null);
+    this.inlineDraft.set('');
+    if (!draft || draft === project.title) return;
+    const updated: ProjectItem = { ...project, title: draft, edited: new Date().toISOString() };
+    void this.persistProject(updated);
+  }
+
+  cancelInlineEdit(): void {
+    this.inlineEditingId.set(null);
+    this.inlineDraft.set('');
   }
 
   closeDialog(): void {

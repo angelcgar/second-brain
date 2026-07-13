@@ -67,7 +67,6 @@ export class KanbanBoardTaskComponent implements OnInit {
     { id: 'esperando', title: 'Esperando', tasks: [] },
     { id: 'sin_fecha', title: 'Sin fecha', tasks: [] },
     { id: 'en_proceso', title: 'En proceso', tasks: [] },
-    { id: 'delegada', title: 'Delegada', tasks: [] },
   ];
 
   areas: AreaItem[] = [];
@@ -323,7 +322,6 @@ export class KanbanBoardTaskComponent implements OnInit {
       { id: 'esperando', title: 'Esperando', tasks: [] },
       { id: 'sin_fecha', title: 'Sin fecha', tasks: [] },
       { id: 'en_proceso', title: 'En proceso', tasks: [] },
-      { id: 'delegada', title: 'Delegada', tasks: [] },
     ];
 
     for (const task of tasks) {

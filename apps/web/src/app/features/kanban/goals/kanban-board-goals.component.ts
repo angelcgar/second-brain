@@ -69,6 +69,9 @@ export class KanbanBoardGoalsComponent implements OnInit {
   private isDragging = false;
   private goalCounter = 0;
 
+  inlineEditingId = signal<string | null>(null);
+  inlineDraft = signal<string>('');
+
   ngOnInit(): void {
     void this.loadData();
   }
@@ -115,6 +118,33 @@ export class KanbanBoardGoalsComponent implements OnInit {
     if (this.isDragging) return;
     this.selectedGoalContext.set({ goal: { ...goal }, areaId });
     this.editingGoal = { ...goal };
+  }
+
+  // ── Inline title edit ──────────────────────────────────────────────
+  startInlineEdit(goal: GoalItem, event: MouseEvent): void {
+    if (this.isDragging) return;
+    event.stopPropagation();
+    this.inlineEditingId.set(goal.id);
+    this.inlineDraft.set(goal.title);
+  }
+
+  onInlineFocus(event: FocusEvent): void {
+    const el = event.target as HTMLInputElement;
+    el.select();
+  }
+
+  saveInlineEdit(goal: GoalItem): void {
+    const draft = this.inlineDraft().trim();
+    this.inlineEditingId.set(null);
+    this.inlineDraft.set('');
+    if (!draft || draft === goal.title) return;
+    const updated: GoalItem = { ...goal, title: draft, edited: new Date().toISOString() };
+    void this.persistGoal(updated);
+  }
+
+  cancelInlineEdit(): void {
+    this.inlineEditingId.set(null);
+    this.inlineDraft.set('');
   }
 
   closeDialog(): void {

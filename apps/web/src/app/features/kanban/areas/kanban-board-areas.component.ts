@@ -43,6 +43,9 @@ export class KanbanBoardAreasComponent implements OnInit {
 
   private areaCounter = 0;
 
+  inlineEditingId = signal<string | null>(null);
+  inlineDraft = signal<string>('');
+
   readonly filteredAreas = computed(() => {
     const active = this.activePill();
     const list = this.areas();
@@ -57,6 +60,32 @@ export class KanbanBoardAreasComponent implements OnInit {
   onAreaClick(area: AreaItem): void {
     this.selectedArea.set(area);
     this.editingArea = { ...area };
+  }
+
+  // ── Inline title edit ──────────────────────────────────────────────
+  startInlineEdit(area: AreaItem, event: MouseEvent): void {
+    event.stopPropagation();
+    this.inlineEditingId.set(area.id);
+    this.inlineDraft.set(area.title);
+  }
+
+  onInlineFocus(event: FocusEvent): void {
+    const el = event.target as HTMLInputElement;
+    el.select();
+  }
+
+  saveInlineEdit(area: AreaItem): void {
+    const draft = this.inlineDraft().trim();
+    this.inlineEditingId.set(null);
+    this.inlineDraft.set('');
+    if (!draft || draft === area.title) return;
+    const updated: AreaItem = { ...area, title: draft };
+    void this.persistArea(updated);
+  }
+
+  cancelInlineEdit(): void {
+    this.inlineEditingId.set(null);
+    this.inlineDraft.set('');
   }
 
   closeDialog(): void {
